@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+        #controls {
+            margin: 20px;
+        }
+        #grid {
+            display: inline-block;
+            border: 2px solid #000;
+            background-color: #ccc;
+        }
+        .row {
+            display: flex;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #aaa;
+            border: 1px solid #888;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell.revealed {
+            background-color: #ddd;
+        }
+        .cell.mine {
+            background-color: #f00;
+            color: #fff;
+        }
+        .cell.flag {
+            background-color: #ff0;
+            color: #000;
+        }
+        #message {
+            margin: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minesweeper</h1>
+    <div id="controls">
+        <label for="rows">Rows:</label>
+        <input type="number" id="rows" value="10" min="5" max="30">
+        <label for="cols">Columns:</label>
+        <input type="number" id="cols" value="10" min="5" max="30">
+        <label for="minePercent">Mine Percentage (1-50%):</label>
+        <input type="number" id="minePercent" value="15" min="1" max="50">
+        <button id="start">Start Game</button>
+    </div>
+    <div id="grid"></div>
+    <div id="message"></div>
+
+    <script>
+        const gridDiv = document.getElementById('grid');
+        const messageDiv = document.getElementById('message');
+        const startButton = document.getElementById('start');
+        let rows, cols, minePercent, totalMines, grid, revealed, flags;
+        let gameOver = false;
+
+        startButton.addEventListener('click', startGame);
+
+        function startGame() {
+            rows = parseInt(document.getElementById('rows').value);
+            cols = parseInt(document.getElementById('cols').value);
+            minePercent = parseInt(document.getElementById('minePercent').value);
+            if (isNaN(rows) || isNaN(cols) || isNaN(minePercent) || rows < 5 || cols < 5 || minePercent < 1 || minePercent > 50) {
+                alert('Invalid input. Rows/Cols min 5, max 30. Mine % 1-50.');
+                return;
+            }
+            totalMines = Math.floor((rows * cols * minePercent) / 100);
+            initializeGrid();
+            renderGrid();
+            messageDiv.textContent = 'Game started! Left click to reveal, right click to flag.';
+            gameOver = false;
+        }
+
+        function initializeGrid() {
+            grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+            revealed = Array.from({ length: rows }, () => Array(cols).fill(false));
+            flags = Array.from({ length: rows }, () => Array(cols).fill(false));
+
+            // Place mines
+            let placed = 0;
+            while (placed < totalMines) {
+                const r = Math.floor(Math.random() * rows);
+                const c = Math.floor(Math.random() * cols);
+                if (grid[r][c] !== 'M') {
+                    grid[r][c] = 'M';
+                    placed++;
+                    // Increment neighbors
+                    for (let i = -1; i <= 1; i++) {
+                        for (let j = -1; j <= 1; j++) {
+                            if (i === 0 && j === 0) continue;
+                            const nr = r + i;
+                            const nc = c + j;
+                            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && grid[nr][nc] !== 'M') {
+                                grid[nr][nc]++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function renderGrid() {
+            gridDiv.innerHTML = '';
+            for (let r = 0; r < rows; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.classList.add('row');
+                for (let c = 0; c < cols; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+                    cell.addEventListener('click', handleLeftClick);
+                    cell.addEventListener('contextmenu', handleRightClick);
+                    rowDiv.appendChild(cell);
+                }
+                gridDiv.appendChild(rowDiv);
+            }
+        }
+
+        function handleLeftClick(e) {
+            if (gameOver) return;
+            const r = parseInt(e.target.dataset.r);
+            const c = parseInt(e.target.dataset.c);
+            if (flags[r][c] || revealed[r][c]) return;
+            revealCell(r, c);
+            checkWin();
+        }
+
+        function handleRightClick(e) {
+            e.preventDefault();
+            if (gameOver) return;
+            const r = parseInt(e.target.dataset.r);
+            const c = parseInt(e.target.dataset.c);
+            if (revealed[r][c]) return;
+            flags[r][c] = !flags[r][c];
+            e.target.classList.toggle('flag');
+            e.target.textContent = flags[r][c] ? '🚩' : '';
+        }
+
+        function revealCell(r, c) {
+            if (revealed[r][c] || flags[r][c]) return;
+            revealed[r][c] = true;
+            const cell = gridDiv.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+            cell.classList.add('revealed');
+            if (grid[r][c] === 'M') {
+                cell.classList.add('mine');
+                cell.textContent = '💣';
+                gameOver = true;
+                messageDiv.textContent = 'Game Over! You hit a mine.';
+                revealAllMines();
+                return;
+            }
+            cell.textContent = grid[r][c] > 0 ? grid[r][c] : '';
+            if (grid[r][c] === 0) {
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        if (i === 0 && j === 0) continue;
+                        const nr = r + i;
+                        const nc = c + j;
+                        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                            revealCell(nr, nc);
+                        }
+                    }
+                }
+            }
+        }
+
+        function revealAllMines() {
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (grid[r][c] === 'M') {
+                        const cell = gridDiv.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+                        cell.classList.add('mine');
+                        cell.textContent = '💣';
+                    }
+                }
+            }
+        }
+
+        function checkWin() {
+            let unrevealed = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (!revealed[r][c] && grid[r][c] !== 'M') unrevealed++;
+                }
+            }
+            if (unrevealed === 0) {
+                gameOver = true;
+                messageDiv.textContent = 'You Win! All safe cells revealed.';
+            }
+        }
+    </script>
+</body>
+</html>
